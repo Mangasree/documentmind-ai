@@ -364,7 +364,7 @@ else:
         with st.spinner("Processing your document..."):
             try:
                 # Create temp directory
-                TEMP_DIR = Path("/temp")
+                TEMP_DIR = Path("/tmp")
                 TEMP_DIR.mkdir(exist_ok=True)
                 
                 # Save file
