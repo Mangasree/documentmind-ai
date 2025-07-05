@@ -361,100 +361,91 @@ else:
                                    key="file_uploader")
     
     if uploaded_file and not st.session_state.file_processed:
-        with st.spinner("Processing your document..."):
-            try:
-                # Create temp directory
-                TEMP_DIR = Path("/tmp")
-                TEMP_DIR.mkdir(exist_ok=True)
-                
-                # Save file
-                file_path = TEMP_DIR / uploaded_file.name
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                # Load document based on type
-                ext = uploaded_file.name.split(".")[-1].lower()
-                if ext == "pdf":
-                    loader = PyPDFLoader(str(file_path))
-                    docs = loader.load_and_split()
-                elif ext == "docx":
-                    loader = Docx2txtLoader(str(file_path))
-                    docs = loader.load()
-                elif ext == "txt":
-                    loader = TextLoader(str(file_path))
-                    docs = loader.load()
-                else:
-                    st.error("Unsupported file format")
-                    st.stop()
-                
-                # Verify content
-                if not docs or not any(doc.page_content.strip() for doc in docs):
-                    st.error("No readable text content found in document")
-                    st.stop()
-                
-                # Split document with PDF-optimized settings
-                splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=1000,
-                    chunk_overlap=200,
-                    separators=["\n\n", "\n", "(?<=\. )", " ", ""],
-                    length_function=len
-                )
-                chunks = splitter.split_documents(docs)
-                
-                if not chunks:
-                    st.error("Failed to create valid text chunks from document")
-                    st.stop()
-                
-                # Create embeddings
-                embeddings = HuggingFaceEmbeddings(
-                    model_name="sentence-transformers/all-MiniLM-L6-v2",
-                    model_kwargs={'device': 'cpu'}
-                )
-                
-                # Test embeddings
-                try:
-                    test_embed = embeddings.embed_query("test")
-                    if not test_embed:
-                        raise ValueError("Empty embedding generated")
-                except Exception as e:
-                    st.error(f"Embedding test failed: {str(e)}")
-                    st.stop()
-                
-                # Create vectorstore
-                try:
-                    vectorstore = FAISS.from_documents(chunks, embeddings)
-                except Exception as e:
-                    st.error(f"Vector store creation failed: {str(e)}")
-                    st.stop()
-                
-                # Initialize LLM
-                llm = ChatGroq(
-                    api_key=st.secrets["GROQ_API_KEY"],
-                    model="llama3-8b-8192",
-                    temperature=0.1
-                )
-                
-                # Create QA chain
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=llm,
-                    retriever=vectorstore.as_retriever(),
-                    return_source_documents=True,
-                    chain_type="stuff"
-                )
-                
-                st.session_state.qa_chain = qa_chain
-                st.session_state.file_processed = True
-                st.session_state.file_name = uploaded_file.name
-                
-                st.success(f"✅ {uploaded_file.name} is ready for questions")
-                
-            except Exception as e:
-                st.error(f"Error processing document: {str(e)}")
-            finally:
-                try:
-                    file_path.unlink()
-                except:
-                    pass
+        try:
+    # Step 1: Save file
+    with st.spinner("📁 Saving uploaded file..."):
+        TEMP_DIR = Path("/tmp")  # or Path("temp") for local
+        TEMP_DIR.mkdir(exist_ok=True)
+        file_path = TEMP_DIR / uploaded_file.name
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+    # Step 2: Load document
+    with st.spinner("📄 Loading document..."):
+        ext = uploaded_file.name.split(".")[-1].lower()
+        if ext == "pdf":
+            loader = PyPDFLoader(str(file_path))
+            docs = loader.load_and_split()
+        elif ext == "docx":
+            loader = Docx2txtLoader(str(file_path))
+            docs = loader.load()
+        elif ext == "txt":
+            loader = TextLoader(str(file_path))
+            docs = loader.load()
+        else:
+            st.error("Unsupported file format")
+            st.stop()
+
+    # Step 3: Validate content
+    if not docs or not any(doc.page_content.strip() for doc in docs):
+        st.error("No readable text found in the document")
+        st.stop()
+
+    # Step 4: Split into chunks
+    with st.spinner("✂️ Splitting document into chunks..."):
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500, chunk_overlap=100,
+            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
+        )
+        chunks = splitter.split_documents(docs)
+
+    if not chunks:
+        st.error("Failed to create valid text chunks from document")
+        st.stop()
+
+    # Step 5: Generate embeddings
+    with st.spinner("🧠 Generating embeddings..."):
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
+            model_kwargs={'device': 'cpu'}
+        )
+        test_embed = embeddings.embed_query("test")
+
+    # Step 6: Build vector store
+    with st.spinner("📚 Building document index..."):
+        vectorstore = FAISS.from_documents(chunks, embeddings)
+
+    # Step 7: Initialize LLM
+    with st.spinner("⚙️ Loading LLM (Groq)..."):
+        llm = ChatGroq(
+            api_key=st.secrets["GROQ_API_KEY"],
+            model="llama3-8b-8192",
+            temperature=0.1
+        )
+
+    # Step 8: Create RAG QA chain
+    with st.spinner("🧩 Creating document Q&A pipeline..."):
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            retriever=vectorstore.as_retriever(),
+            return_source_documents=True,
+            chain_type="stuff"
+        )
+
+    st.session_state.qa_chain = qa_chain
+    st.session_state.file_processed = True
+    st.session_state.file_name = uploaded_file.name
+
+    st.success(f"✅ {uploaded_file.name} is ready for questions!")
+
+except Exception as e:
+    st.error(f"💥 Error processing document: {str(e)}")
+finally:
+    try:
+        file_path.unlink()
+    except:
+        pass
+
     
     if st.session_state.get("file_processed", False):
         with st.container():
