@@ -10,7 +10,7 @@ import time
 
 # -------------------- CONFIG --------------------
 st.set_page_config(
-    page_title="DocumentMind AI", 
+    page_title="DocumentMind AI",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -21,7 +21,6 @@ try:
 except ImportError:
     st.error("""
         **Required package missing**: `pypdf` is not installed.
-        
         Please install it by running:
         ```
         pip install pypdf
@@ -332,10 +331,10 @@ if not st.session_state.show_app:
     # Launch button
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        if st.button("🚀 Launch DocumentMind AI", 
-                    key="launch_btn",
-                    use_container_width=True,
-                    type="primary"):
+        if st.button("🚀 Launch DocumentMind AI",
+                            key="launch_btn",
+                            use_container_width=True,
+                            type="primary"):
             st.session_state.show_app = True
             st.rerun()
 
@@ -345,8 +344,8 @@ else:
     col1, col2 = st.columns([1, 10])
     with col1:
         if st.button("← Back",
-                    key="back_btn",
-                    type="secondary"):
+                            key="back_btn",
+                            type="secondary"):
             st.session_state.show_app = False
             st.session_state.file_processed = False
             st.session_state.chat_history = []
@@ -356,95 +355,95 @@ else:
        st.markdown('<div class="main-title fade-in">DocumentMind AI</div>', unsafe_allow_html=True)
     
     # Upload section
-    uploaded_file = st.file_uploader("Drag and drop or click to browse files", 
-                                   type=["pdf", "docx", "txt"], 
-                                   key="file_uploader")
+    uploaded_file = st.file_uploader("Drag and drop or click to browse files",
+                                       type=["pdf", "docx", "txt"],
+                                       key="file_uploader")
     
     if uploaded_file and not st.session_state.file_processed:
         try:
-    # Step 1: Save file
-    with st.spinner("📁 Saving uploaded file..."):
-        TEMP_DIR = Path("/tmp")  # or Path("temp") for local
-        TEMP_DIR.mkdir(exist_ok=True)
-        file_path = TEMP_DIR / uploaded_file.name
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+            # Step 1: Save file
+            with st.spinner("📁 Saving uploaded file..."):
+                TEMP_DIR = Path("/tmp")  # or Path("temp") for local
+                TEMP_DIR.mkdir(exist_ok=True)
+                file_path = TEMP_DIR / uploaded_file.name
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-    # Step 2: Load document
-    with st.spinner("📄 Loading document..."):
-        ext = uploaded_file.name.split(".")[-1].lower()
-        if ext == "pdf":
-            loader = PyPDFLoader(str(file_path))
-            docs = loader.load_and_split()
-        elif ext == "docx":
-            loader = Docx2txtLoader(str(file_path))
-            docs = loader.load()
-        elif ext == "txt":
-            loader = TextLoader(str(file_path))
-            docs = loader.load()
-        else:
-            st.error("Unsupported file format")
-            st.stop()
+            # Step 2: Load document
+            with st.spinner("📄 Loading document..."):
+                ext = uploaded_file.name.split(".")[-1].lower()
+                if ext == "pdf":
+                    loader = PyPDFLoader(str(file_path))
+                    docs = loader.load_and_split()
+                elif ext == "docx":
+                    loader = Docx2txtLoader(str(file_path))
+                    docs = loader.load()
+                elif ext == "txt":
+                    loader = TextLoader(str(file_path))
+                    docs = loader.load()
+                else:
+                    st.error("Unsupported file format")
+                    st.stop()
 
-    # Step 3: Validate content
-    if not docs or not any(doc.page_content.strip() for doc in docs):
-        st.error("No readable text found in the document")
-        st.stop()
+            # Step 3: Validate content
+            if not docs or not any(doc.page_content.strip() for doc in docs):
+                st.error("No readable text found in the document")
+                st.stop()
 
-    # Step 4: Split into chunks
-    with st.spinner("✂️ Splitting document into chunks..."):
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500, chunk_overlap=100,
-            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
-        )
-        chunks = splitter.split_documents(docs)
+            # Step 4: Split into chunks
+            with st.spinner("✂️ Splitting document into chunks..."):
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=500, chunk_overlap=100,
+                    separators=["\n\n", "\n", "(?<=\. )", " ", ""]
+                )
+                chunks = splitter.split_documents(docs)
 
-    if not chunks:
-        st.error("Failed to create valid text chunks from document")
-        st.stop()
+            if not chunks:
+                st.error("Failed to create valid text chunks from document")
+                st.stop()
 
-    # Step 5: Generate embeddings
-    with st.spinner("🧠 Generating embeddings..."):
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
-            model_kwargs={'device': 'cpu'}
-        )
-        test_embed = embeddings.embed_query("test")
+            # Step 5: Generate embeddings
+            with st.spinner("🧠 Generating embeddings..."):
+                embeddings = HuggingFaceEmbeddings(
+                    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
+                    model_kwargs={'device': 'cpu'}
+                )
+                test_embed = embeddings.embed_query("test")
 
-    # Step 6: Build vector store
-    with st.spinner("📚 Building document index..."):
-        vectorstore = FAISS.from_documents(chunks, embeddings)
+            # Step 6: Build vector store
+            with st.spinner("📚 Building document index..."):
+                vectorstore = FAISS.from_documents(chunks, embeddings)
 
-    # Step 7: Initialize LLM
-    with st.spinner("⚙️ Loading LLM (Groq)..."):
-        llm = ChatGroq(
-            api_key=st.secrets["GROQ_API_KEY"],
-            model="llama3-8b-8192",
-            temperature=0.1
-        )
+            # Step 7: Initialize LLM
+            with st.spinner("⚙️ Loading LLM (Groq)..."):
+                llm = ChatGroq(
+                    api_key=st.secrets["GROQ_API_KEY"],
+                    model="llama3-8b-8192",
+                    temperature=0.1
+                )
 
-    # Step 8: Create RAG QA chain
-    with st.spinner("🧩 Creating document Q&A pipeline..."):
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=vectorstore.as_retriever(),
-            return_source_documents=True,
-            chain_type="stuff"
-        )
+            # Step 8: Create RAG QA chain
+            with st.spinner("🧩 Creating document Q&A pipeline..."):
+                qa_chain = RetrievalQA.from_chain_type(
+                    llm=llm,
+                    retriever=vectorstore.as_retriever(),
+                    return_source_documents=True,
+                    chain_type="stuff"
+                )
 
-    st.session_state.qa_chain = qa_chain
-    st.session_state.file_processed = True
-    st.session_state.file_name = uploaded_file.name
+            st.session_state.qa_chain = qa_chain
+            st.session_state.file_processed = True
+            st.session_state.file_name = uploaded_file.name
 
-    st.success(f"✅ {uploaded_file.name} is ready for questions!")
+            st.success(f"✅ {uploaded_file.name} is ready for questions!")
 
-except Exception as e:
-    st.error(f"💥 Error processing document: {str(e)}")
-finally:
-    try:
-        file_path.unlink()
-    except:
-        pass
+        except Exception as e:
+            st.error(f"💥 Error processing document: {str(e)}")
+        finally:
+            try:
+                file_path.unlink()
+            except:
+                pass
 
     
     if st.session_state.get("file_processed", False):
@@ -491,7 +490,7 @@ finally:
 # -------------------- FOOTER --------------------
 st.markdown("""
     <div class="footer">
-       © 2025 DocumentMind AI. All rights reserved.
+        © 2025 DocumentMind AI. All rights reserved.
         <br>
         Created by <strong>Manga Sree Rapelli</strong>
         <br>
